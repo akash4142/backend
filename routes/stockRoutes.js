@@ -1,41 +1,43 @@
 const express = require("express");
 const router = express.Router();
 const Stock = require("../models/Stock");
-const Order = require("../models/Order")
+const Order = require("../models/Order");
 
-// Get all stock items with status
-// ✅ Get Stock with Reserved Orders
+// ✅ Get All Stock Items with Reserved Orders
 router.get("/", async (req, res) => {
   try {
     const stocks = await Stock.find().populate("product");
 
     // Fetch all orders with reserved stock
-    const reservedOrders = await Order.find({ status: "Pending" }).populate("product supplier");
+    const reservedOrders = await Order.find({ status: "Pending" }).populate("products.product supplier");
 
     const updatedStock = stocks.map(stock => {
       // Find all orders that have reserved this product
-      const ordersWithThisProduct = reservedOrders.filter(order => order.product._id.equals(stock.product._id));
+      const ordersWithThisProduct = reservedOrders
+        .flatMap(order =>
+          order.products
+            .filter(p => p.product && p.product._id.equals(stock.product._id)) // ✅ Matches product inside the array
+            .map(p => ({
+              orderId: order._id,
+              supplier: order.supplier?.name || order.customSupplier,
+              quantityReserved: p.quantity,
+            }))
+        );
 
       return {
         ...stock.toObject(),
-        reservedFor: ordersWithThisProduct.map(order => ({
-          orderId: order._id,
-          supplier: order.supplier.name,
-          quantityReserved: order.orderedQuantity,
-        }))
+        reservedFor: ordersWithThisProduct,
       };
     });
 
     res.json(updatedStock);
   } catch (error) {
-    console.error("Error fetching stock:", error);
+    console.error("❌ Error fetching stock:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
-
-
-// Get low-stock products
+// ✅ Get Low-Stock Products
 router.get("/low-stock", async (req, res) => {
   try {
     const lowStockItems = await Stock.find({ status: "Low Stock" }).populate("product");
@@ -45,7 +47,7 @@ router.get("/low-stock", async (req, res) => {
   }
 });
 
-// Get out-of-stock products
+// ✅ Get Out-of-Stock Products
 router.get("/out-of-stock", async (req, res) => {
   try {
     const outOfStockItems = await Stock.find({ status: "Out of Stock" }).populate("product");
@@ -55,7 +57,7 @@ router.get("/out-of-stock", async (req, res) => {
   }
 });
 
-// Get products by stock status (In Stock, Low Stock, Out of Stock)
+// ✅ Get Products by Stock Status (In Stock, Low Stock, Out of Stock)
 router.get("/status/:status", async (req, res) => {
   try {
     const stockItems = await Stock.find({ status: req.params.status }).populate("product");
@@ -65,7 +67,7 @@ router.get("/status/:status", async (req, res) => {
   }
 });
 
-// Update stock manually
+// ✅ Update Stock Manually
 router.put("/:id", async (req, res) => {
   try {
     let stock = await Stock.findById(req.params.id);
@@ -75,7 +77,7 @@ router.put("/:id", async (req, res) => {
     stock.lastUpdated = new Date();
     await stock.save();
 
-    res.json({ message: "Stock updated", stock });
+    res.json({ message: "✅ Stock updated", stock });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

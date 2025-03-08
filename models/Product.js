@@ -7,6 +7,7 @@ const productSchema = new mongoose.Schema({
   packagingType: { type: String, required: true },
   quantityPerMasterBox: { type: Number, required: true },
   suppliers: [{ type: mongoose.Schema.Types.ObjectId, ref: "Supplier" }], // Supplier reference
+  price:{type:Number,required:true},
 });
 
 module.exports = mongoose.model("Product", productSchema);

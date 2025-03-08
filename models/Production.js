@@ -1,16 +1,21 @@
 const mongoose = require("mongoose");
 
 const productionSchema = new mongoose.Schema({
-  product: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
-  quantityToPackage: { type: Number, required: true },
-  requiredMaterials: [{ type: mongoose.Schema.Types.ObjectId, ref: "Stock" }], // Track materials
+  orderId: { type: mongoose.Schema.Types.ObjectId, ref: "Order", required: true },
+  products: [
+    {
+      product: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: false }, // ✅ Required only if it's an existing product
+      quantity: { type: Number, required: true }, // ✅ Tracks quantity of each product in production
+    },
+  ],
   status: {
     type: String,
-    enum: ["Pending", "In Process", "Completed"],
+    enum: ["Pending", "In Production", "Packaging", "Completed"],
     default: "Pending",
   },
-  createdAt: { type: Date, default: Date.now },
-  completedAt: { type: Date },
+  startDate: { type: Date, default: Date.now },
+  endDate: { type: Date },
+  packagingProcess: { type: String, default: "Standard" }, // Can be updated dynamically
 });
 
 module.exports = mongoose.model("Production", productionSchema);

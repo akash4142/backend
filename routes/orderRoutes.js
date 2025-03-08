@@ -9,30 +9,65 @@ const { generatePurchaseOrderExcel } = require("../utils/excelGenerator");
 const fs = require("fs");
 
 
-// ✅ Reserve stock when an order is created
 router.post("/create", async (req, res) => {
   try {
-    const { productId,customProduct, supplier,customSupplier, quantity, expectedDelivery,expectedArrival } = req.body;
+    const { products, supplier, customSupplier, expectedDelivery } = req.body;
     let { estimatedArrival } = req.body;
 
-    if ((!productId&&!customProduct) || (!supplier && !customSupplier) || !quantity || !expectedDelivery) {
+    if ((!products && products.length === 0) || (!supplier && !customSupplier)  || !expectedDelivery) {
       return res.status(400).json({ message: "All fields are required!" });
     }
 
-    const productStock = await Stock.findOne({ product: productId });
+    let totalInvoiceAmount = 0;
 
-    if (!productStock) {
-      return res.status(404).json({ message: "Stock record not found for this product!" });
+    for (const item of products) {
+      if (!item.product && !item.customProduct) {
+        return res.status(400).json({ message: "Each product must have either an existing product or a custom product!" });
+      }
+
+      if (item.product) {
+        const product = await Product.findById(item.product);
+        if (!product) {
+          return res.status(404).json({ message: "❌ One of the selected products was not found!" });
+        }
+
+        totalInvoiceAmount += product.price * item.quantity;
+      }
     }
 
-    // ✅ Check if enough stock is available before placing an order
-    if (productStock.currentStock <= 0) {
-      return res.status(400).json({ message: "❌ Product is currently out of stock!" });
-    }
+    // if (!supplier && !customSupplier) {
+    //   return res.status(400).json({ message: "❌ You must select an existing supplier or enter a custom supplier!" });
+    // }
 
-    if (productStock.currentStock < quantity) {
-      return res.status(400).json({ message: `❌ Not enough stock available! Only ${productStock.currentStock} units left.` });
-    }
+    // let productStock;
+    // let productPrice = 0;
+
+    // // ✅ If it's an existing product, check stock and price
+    // if (productId) {
+    //   const product = await Product.findById(productId);
+    //   if (!product) {
+    //     return res.status(404).json({ message: "❌ Product not found!" });
+    //   }
+
+    //   productPrice = product.price; // ✅ Fetch product price
+
+    //   productStock = await Stock.findOne({ product: productId });
+    //   if (!productStock) {
+    //     return res.status(404).json({ message: "❌ Stock record not found for this product!" });
+    //   }
+
+    //   // ✅ Debug log: Check stock values
+    //   console.log("🔹 Current Stock:", productStock.currentStock, "Ordered Quantity:", quantity);
+
+    //   // ✅ Check if enough stock is available before placing an order
+    //   if (productStock.currentStock <= 0) {
+    //     return res.status(400).json({ message: "❌ Product is currently out of stock!" });
+    //   }
+
+    //   if (productStock.currentStock < quantity) {
+    //     return res.status(400).json({ message: `❌ Not enough stock available! Only ${productStock.currentStock} units left.` });
+    //   }
+    // }
 
     // ✅ Assign estimatedArrival if missing
     if (!estimatedArrival) {
@@ -40,15 +75,16 @@ router.post("/create", async (req, res) => {
       estimatedArrival.setDate(estimatedArrival.getDate() + 7);
     }
 
+    // // ✅ Calculate Total Price
+    // const totalPrice = productId ? productPrice * quantity : 0; // If custom product, price is set to 0 for now
 
     const newOrder = new Order({
-      product: productId||null,
-      customProduct:customProduct||null,
-      supplier,
-      customSupplier:customSupplier||null,
-      orderedQuantity: quantity,
+      products,
+      supplier: supplier || null,
+      customSupplier: customSupplier || null,
       expectedDelivery,
       estimatedArrival,
+      invoiceAmount: totalInvoiceAmount,
       status: "Pending",
       paymentStatus: "Pending",
     });
@@ -56,10 +92,10 @@ router.post("/create", async (req, res) => {
     await newOrder.save();
     res.status(201).json({ message: "✅ Order placed successfully!", order: newOrder });
   } catch (error) {
+    console.error("❌ Error placing order:", error);
     res.status(500).json({ error: "Failed to create order." });
   }
 });
-
 
 
 
@@ -140,23 +176,63 @@ router.get("/:id/generate-pdf", async (req, res) => {
 });
 
 // Get all orders
+// router.get("/", async (req, res) => {
+//   try {
+//     const orders = await Order.find().populate("product supplier");
+
+//     // Handle missing products or suppliers gracefully
+//     const updatedOrders = orders.map((order) => ({
+//       ...order.toObject(),
+//       product: order.product ? order.product : { name: "Deleted Product" },
+//       supplier: order.supplier ? order.supplier : { name: "Unknown Supplier" },
+//     }));
+
+//     res.json(updatedOrders);
+//   } catch (error) {
+//     console.error("Error fetching orders:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// });
+
 router.get("/", async (req, res) => {
   try {
-    const orders = await Order.find().populate("product supplier");
+    const { productId, month, year } = req.query;
+    let filter = {};
 
-    // Handle missing products or suppliers gracefully
-    const updatedOrders = orders.map((order) => ({
-      ...order.toObject(),
-      product: order.product ? order.product : { name: "Deleted Product" },
-      supplier: order.supplier ? order.supplier : { name: "Unknown Supplier" },
-    }));
+    // ✅ Filter by Product
+    if (productId) {
+      filter["products.product"] = productId;
+    }
 
-    res.json(updatedOrders);
+    // ✅ Filter by Month & Year (Fix: Use `$gte` and `$lt` Instead of `$expr`)
+    if (month || year) {
+      let startDate, endDate;
+
+      if (year) {
+        startDate = new Date(year, 0, 1); // January 1st of the given year
+        endDate = new Date(year, 11, 31, 23, 59, 59); // December 31st of the given year
+      }
+
+      if (month) {
+        const selectedMonth = parseInt(month) - 1; // JavaScript months are 0-indexed
+        startDate = new Date(year, selectedMonth, 1); // First day of the selected month
+        endDate = new Date(year, selectedMonth + 1, 0, 23, 59, 59); // Last day of the selected month
+      }
+
+      filter.orderDate = { $gte: startDate, $lt: endDate };
+    }
+
+    const orders = await Order.find(filter).populate("products.product").populate("supplier");
+
+    res.status(200).json(orders);
   } catch (error) {
-    console.error("Error fetching orders:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("❌ Error fetching filtered orders:", error);
+    res.status(500).json({ error: "Failed to fetch orders." });
   }
 });
+
+
+
 
 // Update order status
 // ✅ Release reserved stock if order is cancelled
@@ -164,7 +240,7 @@ router.put("/:id/status", async (req, res) => {
   try {
     const { status } = req.body;
 
-    if (!["Pending", "In Process", "Received", "Cancelled"].includes(status)) {
+    if (!["Pending", "Received","In Production", "Packaging", "Completed", "Cancelled"].includes(status)) {
       return res.status(400).json({ message: "Invalid status value" });
     }
 
@@ -172,12 +248,15 @@ router.put("/:id/status", async (req, res) => {
     if (!order) return res.status(404).json({ message: "Order not found" });
 
     order.status = status;
-    const productStock = await Stock.findOne({ product: order.product });
+    // const productStock = await Stock.findOne({ product: order.product });
 
-    if (status === "Received" && productStock) {
-      // ✅ Restore reserved stock
-      productStock.currentStock -= order.orderedQuantity;
-      await productStock.save();
+    // if (status === "Received" && productStock) {
+    //   // ✅ Restore reserved stock
+    //   productStock.currentStock -= order.orderedQuantity;
+    //   await productStock.save();
+    // }
+    if (status === "Received") {
+      order.paymentStatus = "Pending"; // ✅ Ensure payment status is set correctly
     }
 
     await order.save();
@@ -188,18 +267,20 @@ router.put("/:id/status", async (req, res) => {
   }
 });
 
-// ✅ Get Purchase History
+// ✅ Get Purchase History with Multiple Products
 router.get("/history", async (req, res) => {
   try {
-    const orders = await Order.find().populate("product supplier").sort({ orderDate: -1 });
+    const orders = await Order.find()
+      .populate("products.product supplier") // ✅ Fetch multiple products per order
+      .sort({ orderDate: -1 });
 
     res.status(200).json(orders);
   } catch (error) {
-    console.error("Error fetching purchase history:", error);
+    console.error("❌ Error fetching purchase history:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });
-  
+
 
 
 // Mark order as received and update stock

@@ -17,6 +17,7 @@ require("./models/Order");
 require("./models/Product");
 require("./models/Supplier");
 require("./models/Stock")
+require("./models/Production")
 
 // Initialize express app
 const app = express();

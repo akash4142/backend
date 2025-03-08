@@ -2,11 +2,12 @@ const express = require("express");
 const router = express.Router();
 const Product = require("../models/Product");
 const Supplier = require("../models/Supplier")
+const Stock = require("../models/Stock")
 
 // Create a new product
 router.post("/add", async (req, res) => {
   try {
-    let { name, productionProcess, requiredMaterials, packagingType, quantityPerMasterBox } = req.body;
+    let { name, productionProcess, requiredMaterials, packagingType, quantityPerMasterBox,price } = req.body;
 
     if (!name || !productionProcess || !packagingType || !quantityPerMasterBox) {
       console.error("Validation Error: Missing fields", req.body); // ✅ Log request data
@@ -20,7 +21,6 @@ router.post("/add", async (req, res) => {
       return res.status(400).json({ message: "Quantity Per Master Box must be a positive number." });
     }
 
-    console.log("✅ Creating new product:", req.body);
 
     const newProduct = new Product({
       name,
@@ -28,9 +28,19 @@ router.post("/add", async (req, res) => {
       requiredMaterials,
       packagingType,
       quantityPerMasterBox,
+      price,
     });
 
-    await newProduct.save();
+    const savedProduct = await newProduct.save();
+
+    // ✅ Add to Stock Automatically
+    const newStock = new Stock({
+      product: savedProduct._id,
+      currentStock: 0, // Default stock to 0
+      minimumStockThreshold: 5, // Set a default threshold
+    });
+
+    await newStock.save();
     console.log("🎉 Product added successfully:", newProduct);
     res.status(201).json({ message: "Product added successfully", product: newProduct });
   } catch (error) {
@@ -82,6 +92,32 @@ router.delete("/:id", async (req, res) => {
     res.json({ message: "Product deleted successfully" });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ✅ Update Product (Including Price)
+router.put("/:id/update", async (req, res) => {
+  try {
+    const { name, productionProcess, packagingType, requiredMaterials, price } = req.body;
+
+    if (!name || !price) {
+      return res.status(400).json({ message: "Product name and price are required!" });
+    }
+
+    const updatedProduct = await Product.findByIdAndUpdate(
+      req.params.id,
+      { name, productionProcess, packagingType, requiredMaterials, price },
+      { new: true }
+    );
+
+    if (!updatedProduct) {
+      return res.status(404).json({ message: "Product not found." });
+    }
+
+    res.json({ message: "✅ Product updated successfully!", product: updatedProduct });
+  } catch (error) {
+    console.error("❌ Error updating product:", error);
+    res.status(500).json({ error: "Failed to update product." });
   }
 });
 

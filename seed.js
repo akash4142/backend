@@ -1,121 +1,166 @@
 const mongoose = require("mongoose");
+const dotenv = require("dotenv");
 const Product = require("./models/Product");
 const Supplier = require("./models/Supplier");
-const Order = require("./models/Order");
 const Stock = require("./models/Stock");
-require("dotenv").config();
+const Order = require("./models/Order");
+const Production = require("./models/Production");
 
-// Connect to MongoDB
+dotenv.config();
+
+// ✅ Connect to Database
 mongoose
-  .connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(() => console.log("✅ Database Connected!"))
-  .catch((err) => console.log("❌ DB Connection Error:", err));
+  .connect(process.env.MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
+  .then(() => console.log("✅ Database connected"))
+  .catch((err) => console.error("❌ Database connection error:", err));
 
-const seedDatabase = async () => {
+const seedData = async () => {
   try {
-    // Clear existing data
-    await Product.deleteMany();
-    await Supplier.deleteMany();
-    await Order.deleteMany();
-    await Stock.deleteMany();
+    console.log("🚀 Seeding Test Data...");
 
-    console.log("🚀 Old data deleted.");
+    // ✅ Clear existing data
+    await Product.deleteMany({});
+    await Supplier.deleteMany({});
+    await Stock.deleteMany({});
+    await Order.deleteMany({});
+    await Production.deleteMany({});
 
-    // ✅ Create Suppliers
-    const supplier1 = new Supplier({
-      name: "Tech Supply Co.",
-      contactPerson: "John Doe",
-      email: "john@techsupply.com",
-      phone: "+1 123 456 7890",
-      address: "456 Market St, Toronto, Canada",
-    });
+    console.log("✅ Existing data cleared");
 
-    const supplier2 = new Supplier({
-      name: "Manufacture Direct",
-      contactPerson: "Jane Smith",
-      email: "jane@manufacturedirect.com",
-      phone: "+1 987 654 3210",
-      address: "789 Factory Rd, Vancouver, Canada",
-    });
+    // ✅ Create Suppliers with Full Details
+    const suppliers = await Supplier.insertMany([
+      {
+        name: "Tech Supply Co.",
+        contactPerson: "John Doe",
+        email: "john@techsupply.com",
+        phone: "+1 123 456 7890",
+        address: "456 Market St, Toronto, Canada",
+      },
+      {
+        name: "Manufacture Direct",
+        contactPerson: "Jane Smith",
+        email: "jane@manufacturedirect.com",
+        phone: "+1 987 654 3210",
+        address: "789 Factory Rd, Vancouver, Canada",
+      },
+    ]);
 
-    await supplier1.save();
-    await supplier2.save();
+    console.log("✅ Suppliers created with full contact details");
 
-    console.log("✅ Suppliers added.");
+    // ✅ Create Test Products
+    const products = await Product.insertMany([
+      {
+        name: "Industrial Gloves",
+        productionProcess: "Molding & Vulcanization",
+        requiredMaterials: ["Rubber", "Textile Reinforcement"],
+        packagingType: "Box",
+        quantityPerMasterBox: 50,
+        suppliers: [suppliers[0]._id, suppliers[1]._id], // ✅ Linking to suppliers
+        price: 5.0,
+      },
+      {
+        name: "Safety Glasses",
+        productionProcess: "Injection Molding & Assembly",
+        requiredMaterials: ["Polycarbonate", "Elastic Bands"],
+        packagingType: "Plastic Wrap",
+        quantityPerMasterBox: 100,
+        suppliers: [suppliers[0]._id],
+        price: 10.0,
+      },
+      {
+        name: "Hard Hat",
+        productionProcess: "Molding & Assembly",
+        requiredMaterials: ["HDPE", "Foam Padding"],
+        packagingType: "Carton",
+        quantityPerMasterBox: 20,
+        suppliers: [suppliers[1]._id],
+        price: 20.0,
+      },
+    ]);
 
-    // ✅ Create Products
-    const product1 = new Product({
-      name: "Advanced Paint Brush",
-      productionProcess: "Assembly & Finishing",
-      requiredMaterials: ["Wooden Handle", "Synthetic Bristles"],
-      packagingType: "Box",
-      quantityPerMasterBox: 50,
-      suppliers: [supplier1._id],
-    });
+    console.log("✅ Products created and linked to suppliers");
 
-    const product2 = new Product({
-      name: "Heavy-Duty Gloves",
-      productionProcess: "Chemical Treatment",
-      requiredMaterials: ["Latex", "Cotton Lining"],
-      packagingType: "Plastic Wrap",
-      quantityPerMasterBox: 100,
-      suppliers: [supplier2._id],
-    });
+    // ✅ Create Stock Records
+    const stocks = await Stock.insertMany([
+      { product: products[0]._id, currentStock: 50, minimumStockThreshold: 10 },
+      { product: products[1]._id, currentStock: 30, minimumStockThreshold: 5 },
+      { product: products[2]._id, currentStock: 20, minimumStockThreshold: 3 },
+    ]);
 
-    await product1.save();
-    await product2.save();
+    console.log("✅ Stock records created");
 
-    console.log("✅ Products added.");
+    // ✅ Create Test Orders (with multiple products)
+    const orders = await Order.insertMany([
+      {
+        products: [
+          { product: products[0]._id, quantity: 10 },
+          { product: products[1]._id, quantity: 5 },
+        ],
+        supplier: suppliers[0]._id,
+        expectedDelivery: new Date(),
+        estimatedArrival: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        invoiceAmount: 100,
+        status: "Pending",
+      },
+      {
+        products: [{ product: products[2]._id, quantity: 15 }],
+        supplier: suppliers[1]._id,
+        expectedDelivery: new Date(),
+        estimatedArrival: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        invoiceAmount: 300,
+        status: "In Production",
+      },
+      {
+        products: [{ product: products[1]._id, quantity: 10 }],
+        supplier: suppliers[0]._id,
+        expectedDelivery: new Date(),
+        estimatedArrival: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        invoiceAmount: 100,
+        status: "Packaging",
+      },
+    ]);
 
-    // ✅ Create Initial Stock
-    const stock1 = new Stock({
-      product: product1._id,
-      currentStock: 200,
-      minimumStockThreshold: 20,
-    });
+    console.log("✅ Orders created with supplier details");
 
-    const stock2 = new Stock({
-      product: product2._id,
-      currentStock: 100,
-      minimumStockThreshold: 15,
-    });
+    // ✅ Move Some Orders to Production
+    await Production.insertMany([
+      {
+        orderId: orders[1]._id,
+        products: orders[1].products,
+        status: "In Production",
+        packagingProcess: "Standard",
+      },
+      {
+        orderId: orders[2]._id,
+        products: orders[2].products,
+        status: "Packaging",
+        packagingProcess: "Custom",
+      },
+    ]);
 
-    await stock1.save();
-    await stock2.save();
+    console.log("✅ Production records created");
 
-    console.log("✅ Stock added.");
+    // ✅ Update Stock Based on Orders
+    for (let order of orders) {
+      for (let item of order.products) {
+        await Stock.findOneAndUpdate(
+          { product: item.product },
+          { $inc: { currentStock: -item.quantity, reservedStock: item.quantity } }
+        );
+      }
+    }
 
-    // ✅ Create Orders
-    const order1 = new Order({
-      product: product1._id,
-      supplier: supplier1._id,
-      orderedQuantity: 30,
-      estimatedArrival: new Date("2025-03-10"),
-      totalPrice: 600,
-      status: "Pending",
-    });
+    console.log("✅ Stock updated based on orders");
 
-    const order2 = new Order({
-      product: product2._id,
-      supplier: supplier2._id,
-      orderedQuantity: 50,
-      estimatedArrival: new Date("2025-03-12"),
-      totalPrice: 1200,
-      status: "Received",
-    });
-
-    await order1.save();
-    await order2.save();
-
-    console.log("✅ Orders added.");
-
-    console.log("🎉 Database seeding completed successfully!");
+    console.log("🎉 Test Data Seeded Successfully! 🚀");
     mongoose.connection.close();
   } catch (error) {
-    console.error("❌ Error seeding database:", error);
+    console.error("❌ Error seeding test data:", error);
     mongoose.connection.close();
   }
 };
 
-// Run the seeding script
-seedDatabase();
+seedData();
