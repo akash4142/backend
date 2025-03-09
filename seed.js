@@ -17,6 +17,12 @@ mongoose
   .then(() => console.log("✅ Database connected"))
   .catch((err) => console.error("❌ Database connection error:", err));
 
+const createOrderWithNumber = async (orderData) => {
+  const count = await Order.countDocuments();
+  orderData.orderNumber = `ORD-${1000 + count + 1}`;
+  return new Order(orderData).save();
+};
+
 const seedData = async () => {
   try {
     console.log("🚀 Seeding Test Data...");
@@ -58,7 +64,7 @@ const seedData = async () => {
         requiredMaterials: ["Rubber", "Textile Reinforcement"],
         packagingType: "Box",
         quantityPerMasterBox: 50,
-        suppliers: [suppliers[0]._id, suppliers[1]._id], // ✅ Linking to suppliers
+        suppliers: [suppliers[0]._id, suppliers[1]._id],
         price: 5.0,
       },
       {
@@ -92,15 +98,14 @@ const seedData = async () => {
 
     console.log("✅ Stock records created");
 
-    // ✅ Create Test Orders (with multiple products)
-    const orders = await Order.insertMany([
+    // ✅ Create Orders with Unique Order Numbers
+    const orders = [
       {
         products: [
           { product: products[0]._id, quantity: 10 },
           { product: products[1]._id, quantity: 5 },
         ],
         supplier: suppliers[0]._id,
-        expectedDelivery: new Date(),
         estimatedArrival: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         invoiceAmount: 100,
         status: "Pending",
@@ -108,7 +113,6 @@ const seedData = async () => {
       {
         products: [{ product: products[2]._id, quantity: 15 }],
         supplier: suppliers[1]._id,
-        expectedDelivery: new Date(),
         estimatedArrival: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         invoiceAmount: 300,
         status: "In Production",
@@ -116,30 +120,29 @@ const seedData = async () => {
       {
         products: [{ product: products[1]._id, quantity: 10 }],
         supplier: suppliers[0]._id,
-        expectedDelivery: new Date(),
         estimatedArrival: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         invoiceAmount: 100,
         status: "Packaging",
       },
-    ]);
+    ];
+
+    for (const order of orders) {
+      await createOrderWithNumber(order);
+    }
 
     console.log("✅ Orders created with supplier details");
 
     // ✅ Move Some Orders to Production
-    await Production.insertMany([
-      {
-        orderId: orders[1]._id,
-        products: orders[1].products,
-        status: "In Production",
-        packagingProcess: "Standard",
-      },
-      {
-        orderId: orders[2]._id,
-        products: orders[2].products,
-        status: "Packaging",
-        packagingProcess: "Custom",
-      },
-    ]);
+    const productionOrders = await Order.find({ status: { $in: ["In Production", "Packaging"] } });
+
+    const productionRecords = productionOrders.map((order) => ({
+      orderId: order._id,
+      products: order.products,
+      status: order.status,
+      packagingProcess: order.status === "Packaging" ? "Custom" : "Standard",
+    }));
+
+    await Production.insertMany(productionRecords);
 
     console.log("✅ Production records created");
 

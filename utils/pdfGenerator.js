@@ -9,31 +9,51 @@ const generatePurchaseOrderPDF = (order, filePath) => {
       const stream = fs.createWriteStream(filePath);
       doc.pipe(stream);
 
-      doc.fontSize(18).text("Purchase Order", { align: "center" });
+
+      // ✅ Invoice Details
+      doc.fontSize(14).text(`Invoice ID: ${order._id}`, { align: "left" });
+      doc.fontSize(10).text(`Date: ${new Date().toLocaleDateString()}`);
+      doc.fontSize(10).text(`Supplier: ${order.supplier?.name || order.customSupplier}`);
+      doc.fontSize(10).text(`Estimated Arrival: ${new Date(order.estimatedArrival).toLocaleDateString()}`);
+      doc.fontSize(10).text(`Payment Status: ${order.paymentStatus}`);
       doc.moveDown();
 
-      doc.fontSize(12).text(`Order ID: ${order._id}`);
-      doc.text(`Supplier: ${order.supplier?.name || "Unknown Supplier"}`);
-      doc.text(`Estimated Arrival: ${new Date(order.estimatedArrival).toLocaleDateString()}`);
-      doc.text(`Payment Status: ${order.paymentStatus}`);
-
-      doc.fontSize(14).text("Order Details",{underline:true});
+      // ✅ Table Header
+      doc.fontSize(12).text("Product", 50, 220);
+      doc.text("Quantity", 250, 220);
+      doc.text("Price", 350, 220);
+      doc.text("Total", 450, 220);
       doc.moveDown();
 
-      doc.text(`Product: ${order.product?.name || "Deleted Product"}`);
-      doc.text(`Quantity Ordered: ${order.orderedQuantity}`);
-      doc.text(`Order Date: ${new Date(order.orderDate).toLocaleDateString()}`);
+      let totalAmount = 0;
+      let yPosition = 250;
 
+      order.products.forEach((p) => {
+        const totalPrice = p.product.price * p.quantity;
+        totalAmount += totalPrice;
+
+        doc.text(p.product?.name || p.customProduct, 50, yPosition);
+        doc.text(p.quantity, 250, yPosition);
+        doc.text(`$${p.product.price.toFixed(2)}`, 350, yPosition);
+        doc.text(`$${totalPrice.toFixed(2)}`, 450, yPosition);
+        yPosition += 20;
+      });
+
+      // ✅ Total Amount
+      doc.moveDown(2);
+      doc.fontSize(14).text(`Total Invoice: $${totalAmount.toFixed(2)}`, { align: "right", bold: true });
 
       doc.text("Thank you for your business!", { align: "center" });
       doc.end();
+
       stream.on("finish", () => {
-        console.log(`PDF file created: ${filePath}`);
+        console.log(`✅ PDF file created: ${filePath}`);
         resolve(filePath);
       });
+
       stream.on("error", (err) => reject(err));
     } catch (error) {
-      console.error("Error generating PDF:", error);
+      console.error("❌ Error generating PDF:", error);
       reject(error);
     }
   });

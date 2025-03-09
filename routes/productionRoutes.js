@@ -6,13 +6,32 @@ const Product = require("../models/Product");
 const Order = require("../models/Order");
 
 // ✅ Get All Production Orders
+// router.get("/", async (req, res) => {
+//   try {
+//     const productionOrders = await Production.find()
+//       .populate("orderId", "status") // ✅ Fetch order details
+//       .populate("products.product", "name") // ✅ Fetch product details correctly
+//       .exec();
+
+//     res.status(200).json(productionOrders);
+//   } catch (error) {
+//     console.error("❌ Error fetching production orders:", error);
+//     res.status(500).json({ error: "Failed to fetch production orders." });
+//   }
+// });
+
+
 router.get("/", async (req, res) => {
   try {
     const productionOrders = await Production.find()
-      .populate("orderId", "status") // ✅ Fetch order details
-      .populate("products.product", "name") // ✅ Fetch product details correctly
-      .exec();
-
+      .populate({
+        path: "orderId",
+        select: "orderNumber status", // ✅ Ensure orderNumber is fetched
+      })
+      .populate({
+        path: "products.product",
+        select: "name",
+      });
     res.status(200).json(productionOrders);
   } catch (error) {
     console.error("❌ Error fetching production orders:", error);

@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 
 const orderSchema = new mongoose.Schema({
+  orderNumber:{type:String,unique:true},
   products: [
     {
       product: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true }, // ✅ Required only if it's not a custom product
@@ -23,6 +24,15 @@ const orderSchema = new mongoose.Schema({
     enum: ["Pending", "Paid", "Overdue", "Cancelled"],
     default: "Pending",
   },
+});
+
+// ✅ Auto-generate a Short Order Number (ORD-1001, ORD-1002...)
+orderSchema.pre("save", async function (next) {
+  if (!this.orderNumber) {
+    const count = await mongoose.model("Order").countDocuments();
+    this.orderNumber = `ORD-${1000 + count + 1}`;
+  }
+  next();
 });
 
 module.exports = mongoose.model("Order", orderSchema);

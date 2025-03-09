@@ -3,30 +3,42 @@ const router = express.Router();
 const Stock = require("../models/Stock");
 const Order = require("../models/Order");
 
-// ✅ Get All Stock Items with Reserved Orders
+
+
+//✅ Get Low-Stock Products
+router.get("/low-stock", async (req, res) => {
+  try {
+    const lowStockItems = await Stock.find({ status: "Low Stock" }).populate("product");
+    res.json(lowStockItems);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 router.get("/", async (req, res) => {
   try {
     const stocks = await Stock.find().populate("product");
 
-    // Fetch all orders with reserved stock
-    const reservedOrders = await Order.find({ status: "Pending" }).populate("products.product supplier");
+    // ✅ Fetch all orders with reserved stock, including `orderNumber`
+    const reservedOrders = await Order.find({ status: "Pending" })
+      .populate("supplier", "name")
+      .select("_id orderNumber supplier products");
 
     const updatedStock = stocks.map(stock => {
-      // Find all orders that have reserved this product
-      const ordersWithThisProduct = reservedOrders
-        .flatMap(order =>
-          order.products
-            .filter(p => p.product && p.product._id.equals(stock.product._id)) // ✅ Matches product inside the array
-            .map(p => ({
-              orderId: order._id,
-              supplier: order.supplier?.name || order.customSupplier,
-              quantityReserved: p.quantity,
-            }))
-        );
+      // ✅ Find all orders that reserved this product
+      const ordersWithThisProduct = reservedOrders.filter(order =>
+        order.products.some(p => p.product.equals(stock.product._id))
+      );
 
       return {
         ...stock.toObject(),
-        reservedFor: ordersWithThisProduct,
+        reservedFor: ordersWithThisProduct.map(order => ({
+          orderId: order._id, // Keep for debugging if needed
+          orderNumber: order.orderNumber, // ✅ Now we have `orderNumber`
+          supplier: order.supplier?.name || "Unknown Supplier",
+          quantityReserved: order.products.find(p => p.product.equals(stock.product._id))?.quantity || 0,
+        })),
       };
     });
 
@@ -37,15 +49,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ✅ Get Low-Stock Products
-router.get("/low-stock", async (req, res) => {
-  try {
-    const lowStockItems = await Stock.find({ status: "Low Stock" }).populate("product");
-    res.json(lowStockItems);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+
 
 // ✅ Get Out-of-Stock Products
 router.get("/out-of-stock", async (req, res) => {

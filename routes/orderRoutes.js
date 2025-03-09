@@ -97,14 +97,10 @@ router.post("/create", async (req, res) => {
   }
 });
 
-
-
-
-
 // Generate Excel report for purchase orders
 router.get("/generate-excel", async (req, res) => {
   try {
-    const orders = await Order.find().populate("product supplier");
+    const orders = await Order.find().populate("products.product supplier");
 
     // Check if there are orders to generate the report
     if (!orders || orders.length === 0) {
@@ -141,7 +137,7 @@ router.get("/generate-excel", async (req, res) => {
 // Generate PDF for an order
 router.get("/:id/generate-pdf", async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id).populate("product supplier");
+    const order = await Order.findById(req.params.id).populate("products.product supplier");
 
     // Check if the order exists
     if (!order) {
@@ -175,24 +171,6 @@ router.get("/:id/generate-pdf", async (req, res) => {
   }
 });
 
-// Get all orders
-// router.get("/", async (req, res) => {
-//   try {
-//     const orders = await Order.find().populate("product supplier");
-
-//     // Handle missing products or suppliers gracefully
-//     const updatedOrders = orders.map((order) => ({
-//       ...order.toObject(),
-//       product: order.product ? order.product : { name: "Deleted Product" },
-//       supplier: order.supplier ? order.supplier : { name: "Unknown Supplier" },
-//     }));
-
-//     res.json(updatedOrders);
-//   } catch (error) {
-//     console.error("Error fetching orders:", error);
-//     res.status(500).json({ message: "Server error", error: error.message });
-//   }
-// });
 
 router.get("/", async (req, res) => {
   try {
@@ -232,9 +210,6 @@ router.get("/", async (req, res) => {
 });
 
 
-
-
-// Update order status
 // ✅ Release reserved stock if order is cancelled
 router.put("/:id/status", async (req, res) => {
   try {
@@ -280,8 +255,6 @@ router.get("/history", async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });
-
-
 
 // Mark order as received and update stock
 router.put("/:id/receive", async (req, res) => {
