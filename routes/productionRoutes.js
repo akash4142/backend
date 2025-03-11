@@ -5,37 +5,40 @@ const Stock = require("../models/Stock");
 const Product = require("../models/Product");
 const Order = require("../models/Order");
 
-// ✅ Get All Production Orders
-// router.get("/", async (req, res) => {
-//   try {
-//     const productionOrders = await Production.find()
-//       .populate("orderId", "status") // ✅ Fetch order details
-//       .populate("products.product", "name") // ✅ Fetch product details correctly
-//       .exec();
-
-//     res.status(200).json(productionOrders);
-//   } catch (error) {
-//     console.error("❌ Error fetching production orders:", error);
-//     res.status(500).json({ error: "Failed to fetch production orders." });
-//   }
-// });
-
 
 router.get("/", async (req, res) => {
   try {
-    const productionOrders = await Production.find()
+    const productionOrders = await Production.find({ status: { $ne: "Completed" } })
       .populate({
         path: "orderId",
         select: "orderNumber status", // ✅ Ensure orderNumber is fetched
       })
       .populate({
         path: "products.product",
-        select: "name",
+        select: "name productionProcess packagingType quantityPerMasterBox requiredMaterials",
       });
     res.status(200).json(productionOrders);
   } catch (error) {
     console.error("❌ Error fetching production orders:", error);
     res.status(500).json({ error: "Failed to fetch production orders." });
+  }
+});
+
+// ✅ Update Comments Separately (Fix Path)
+router.put("/:id/comments", async (req, res) => {
+  try {
+    const { comments } = req.body;
+
+    const production = await Production.findById(req.params.id);
+    if (!production) return res.status(404).json({ message: "Production record not found." });
+
+    production.comments = comments; // ✅ Update Comments in DB
+    await production.save();
+
+    res.json({ message: "✅ Comment updated successfully!", production });
+  } catch (error) {
+    console.error("❌ Error updating comments:", error);
+    res.status(500).json({ error: "Failed to update comments." });
   }
 });
 
@@ -79,7 +82,7 @@ router.post("/start", async (req, res) => {
 // ✅ Update Production Status (Move to Packaging or Completed)
 router.put("/:id/status", async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status,comments } = req.body;
     if (!["In Production", "Packaging", "Completed"].includes(status)) {
       return res.status(400).json({ message: "Invalid status update." });
     }
@@ -88,6 +91,7 @@ router.put("/:id/status", async (req, res) => {
     if (!production) return res.status(404).json({ message: "Production record not found." });
 
     production.status = status;
+    
     if (status === "Completed") {
       production.endDate = new Date();
     }
@@ -101,6 +105,10 @@ router.put("/:id/status", async (req, res) => {
       await Order.findByIdAndUpdate(production.orderId, { status: "Completed" });
     }
 
+    // ✅ Remove from frontend list if status is "Completed"
+    if (status === "Completed") {
+      await Production.deleteOne({ _id: req.params.id }); // ✅ Removes Completed Orders
+    }
     
     res.json({ message: `✅ Production updated to ${status}`, production });
   } catch (error) {

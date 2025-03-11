@@ -8,6 +8,10 @@ const productSchema = new mongoose.Schema({
   quantityPerMasterBox: { type: Number, required: true },
   suppliers: [{ type: mongoose.Schema.Types.ObjectId, ref: "Supplier" }], // Supplier reference
   price:{type:Number,required:true},
+  ASIN: { type: String, required:true ,unique:true }, // ✅ Amazon Standard Identification Number
+  SKU: { type: String, required:true,unique:true}, // ✅ Stock Keeping Unit
+  manufacturerReference: { type: String, default: null }, // ✅ Manufacturer Reference
+  initialStock:{type:Number,required:true,default:0}
 });
 
 module.exports = mongoose.model("Product", productSchema);

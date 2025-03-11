@@ -15,7 +15,8 @@ const productionSchema = new mongoose.Schema({
   },
   startDate: { type: Date, default: Date.now },
   endDate: { type: Date },
-  packagingProcess: { type: String, default: "Standard" }, // Can be updated dynamically
+  packagingProcess: { type: String, default: "Standard" },
+  comments:{type:String,default:""},
 });
 
 module.exports = mongoose.model("Production", productionSchema);

@@ -1,169 +1,134 @@
 const mongoose = require("mongoose");
-const dotenv = require("dotenv");
 const Product = require("./models/Product");
 const Supplier = require("./models/Supplier");
-const Stock = require("./models/Stock");
 const Order = require("./models/Order");
-const Production = require("./models/Production");
+const Stock = require("./models/Stock");
 
-dotenv.config();
+require("dotenv").config(); // Ensure your `.env` file contains MONGO_URI
 
-// ✅ Connect to Database
-mongoose
-  .connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
-  .then(() => console.log("✅ Database connected"))
-  .catch((err) => console.error("❌ Database connection error:", err));
+// ✅ Connect to MongoDB
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+.then(() => console.log("✅ MongoDB Connected"))
+.catch((err) => console.error("❌ MongoDB Connection Error:", err));
 
-const createOrderWithNumber = async (orderData) => {
-  const count = await Order.countDocuments();
-  orderData.orderNumber = `ORD-${1000 + count + 1}`;
-  return new Order(orderData).save();
-};
-
-const seedData = async () => {
+const seedDatabase = async () => {
   try {
-    console.log("🚀 Seeding Test Data...");
+    console.log("🚀 Starting Data Seeding...");
 
-    // ✅ Clear existing data
-    await Product.deleteMany({});
-    await Supplier.deleteMany({});
-    await Stock.deleteMany({});
-    await Order.deleteMany({});
-    await Production.deleteMany({});
+    // ✅ Clear Existing Data
+    await Product.deleteMany();
+    await Supplier.deleteMany();
+    await Order.deleteMany();
+    await Stock.deleteMany();
 
-    console.log("✅ Existing data cleared");
+    console.log("✅ Cleared Existing Data");
 
-    // ✅ Create Suppliers with Full Details
-    const suppliers = await Supplier.insertMany([
-      {
-        name: "Tech Supply Co.",
-        contactPerson: "John Doe",
-        email: "john@techsupply.com",
-        phone: "+1 123 456 7890",
-        address: "456 Market St, Toronto, Canada",
-      },
-      {
-        name: "Manufacture Direct",
-        contactPerson: "Jane Smith",
-        email: "jane@manufacturedirect.com",
-        phone: "+1 987 654 3210",
-        address: "789 Factory Rd, Vancouver, Canada",
-      },
-    ]);
+    // ✅ Create Suppliers
+    const supplier1 = new Supplier({
+      name: "Tech Supply Co.",
+      contactPerson: "John Doe",
+      email: "john@techsupply.com",
+      phone: "+1 123 456 7890",
+      address: "456 Market St, Toronto, Canada",
+    });
 
-    console.log("✅ Suppliers created with full contact details");
+    const supplier2 = new Supplier({
+      name: "Manufacture Direct",
+      contactPerson: "Jane Smith",
+      email: "jane@manufacturedirect.com",
+      phone: "+1 987 654 3210",
+      address: "789 Factory Rd, Vancouver, Canada",
+    });
 
-    // ✅ Create Test Products
-    const products = await Product.insertMany([
-      {
-        name: "Industrial Gloves",
-        productionProcess: "Molding & Vulcanization",
-        requiredMaterials: ["Rubber", "Textile Reinforcement"],
-        packagingType: "Box",
-        quantityPerMasterBox: 50,
-        suppliers: [suppliers[0]._id, suppliers[1]._id],
-        price: 5.0,
-      },
-      {
-        name: "Safety Glasses",
-        productionProcess: "Injection Molding & Assembly",
-        requiredMaterials: ["Polycarbonate", "Elastic Bands"],
-        packagingType: "Plastic Wrap",
-        quantityPerMasterBox: 100,
-        suppliers: [suppliers[0]._id],
-        price: 10.0,
-      },
-      {
-        name: "Hard Hat",
-        productionProcess: "Molding & Assembly",
-        requiredMaterials: ["HDPE", "Foam Padding"],
-        packagingType: "Carton",
-        quantityPerMasterBox: 20,
-        suppliers: [suppliers[1]._id],
-        price: 20.0,
-      },
-    ]);
+    await supplier1.save();
+    await supplier2.save();
+    console.log("✅ Suppliers Added");
 
-    console.log("✅ Products created and linked to suppliers");
+    // ✅ Create Products with Initial Stock
+    const product1 = new Product({
+      name: "Laptop",
+      productionProcess: "Assembly Line",
+      requiredMaterials: ["Processor", "RAM", "Screen"],
+      packagingType: "Box",
+      quantityPerMasterBox: 5,
+      suppliers: [supplier1._id],
+      price: 1200,
+      initialStock: 50,
+      ASIN: "B08LK6PFL1",
+      SKU: "LAP-001",
+    });
+
+    const product2 = new Product({
+      name: "Wireless Headphones",
+      productionProcess: "Molding",
+      requiredMaterials: ["Plastic", "Battery", "Speakers"],
+      packagingType: "Plastic Wrap",
+      quantityPerMasterBox: 10,
+      suppliers: [supplier2._id],
+      price: 150,
+      initialStock: 100,
+      ASIN: "B08NC6PPL2",
+      SKU: "HPH-002",
+    });
+
+    await product1.save();
+    await product2.save();
+    console.log("✅ Products Added");
 
     // ✅ Create Stock Records
-    const stocks = await Stock.insertMany([
-      { product: products[0]._id, currentStock: 50, minimumStockThreshold: 10 },
-      { product: products[1]._id, currentStock: 30, minimumStockThreshold: 5 },
-      { product: products[2]._id, currentStock: 20, minimumStockThreshold: 3 },
-    ]);
+    const stock1 = new Stock({
+      product: product1._id,
+      currentStock: product1.initialStock,
+      minimumStockThreshold: 10,
+    });
 
-    console.log("✅ Stock records created");
+    const stock2 = new Stock({
+      product: product2._id,
+      currentStock: product2.initialStock,
+      minimumStockThreshold: 15,
+    });
 
-    // ✅ Create Orders with Unique Order Numbers
-    const orders = [
-      {
-        products: [
-          { product: products[0]._id, quantity: 10 },
-          { product: products[1]._id, quantity: 5 },
-        ],
-        supplier: suppliers[0]._id,
-        estimatedArrival: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        invoiceAmount: 100,
-        status: "Pending",
-      },
-      {
-        products: [{ product: products[2]._id, quantity: 15 }],
-        supplier: suppliers[1]._id,
-        estimatedArrival: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        invoiceAmount: 300,
-        status: "In Production",
-      },
-      {
-        products: [{ product: products[1]._id, quantity: 10 }],
-        supplier: suppliers[0]._id,
-        estimatedArrival: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        invoiceAmount: 100,
-        status: "Packaging",
-      },
-    ];
+    await stock1.save();
+    await stock2.save();
+    console.log("✅ Stock Records Added");
 
-    for (const order of orders) {
-      await createOrderWithNumber(order);
-    }
+    // ✅ Create Orders
+    const order1 = new Order({
+      products: [{ product: product1._id, quantity: 2 }],
+      supplier: supplier1._id,
+      expectedDelivery: new Date(),
+      estimatedArrival: new Date(),
+      invoiceAmount: product1.price * 2,
+      status: "Pending",
+      paymentDueDate: new Date(new Date().setDate(new Date().getDate() + 60)),
+      paymentStatus: "Pending",
+    });
 
-    console.log("✅ Orders created with supplier details");
+    const order2 = new Order({
+      products: [{ product: product2._id, quantity: 5 }],
+      supplier: supplier2._id,
+      expectedDelivery: new Date(),
+      estimatedArrival: new Date(),
+      invoiceAmount: product2.price * 5,
+      status: "Pending",
+      paymentDueDate: new Date(new Date().setDate(new Date().getDate() + 60)),
+      paymentStatus: "Pending",
+    });
 
-    // ✅ Move Some Orders to Production
-    const productionOrders = await Order.find({ status: { $in: ["In Production", "Packaging"] } });
+    await order1.save();
+    await order2.save();
+    console.log("✅ Orders Added");
 
-    const productionRecords = productionOrders.map((order) => ({
-      orderId: order._id,
-      products: order.products,
-      status: order.status,
-      packagingProcess: order.status === "Packaging" ? "Custom" : "Standard",
-    }));
-
-    await Production.insertMany(productionRecords);
-
-    console.log("✅ Production records created");
-
-    // ✅ Update Stock Based on Orders
-    for (let order of orders) {
-      for (let item of order.products) {
-        await Stock.findOneAndUpdate(
-          { product: item.product },
-          { $inc: { currentStock: -item.quantity, reservedStock: item.quantity } }
-        );
-      }
-    }
-
-    console.log("✅ Stock updated based on orders");
-
-    console.log("🎉 Test Data Seeded Successfully! 🚀");
+    console.log("🎉 Database Seeding Complete!");
     mongoose.connection.close();
   } catch (error) {
-    console.error("❌ Error seeding test data:", error);
+    console.error("❌ Seeding Error:", error);
     mongoose.connection.close();
   }
 };
 
-seedData();
+// Run the seeding function
+seedDatabase();

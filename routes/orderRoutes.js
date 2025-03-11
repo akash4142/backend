@@ -87,6 +87,7 @@ router.post("/create", async (req, res) => {
       invoiceAmount: totalInvoiceAmount,
       status: "Pending",
       paymentStatus: "Pending",
+      paymentDueDate: new Date(new Date().setDate(new Date().getDate()+60)),
     });
 
     await newOrder.save();
@@ -350,23 +351,40 @@ router.get("/overdue-payments", async (req, res) => {
   }
 });
 
+// ✅ Update Payment Status of an Order
+router.put("/:id/mark-paid", async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ message: "Order not found!" });
+
+    // ✅ Check if it's already paid
+    if (order.paymentStatus === "Paid") {
+      return res.status(400).json({ message: "Order is already marked as Paid!" });
+    }
+
+    order.paymentStatus = "Paid"; // ✅ Update payment status
+    await order.save();
+
+    res.json({ message: "✅ Payment marked as Paid successfully!", order });
+  } catch (error) {
+    console.error("❌ Error updating payment status:", error);
+    res.status(500).json({ error: "Failed to update payment status." });
+  }
+});
+
+// ✅ Get Total Amount Owed to Suppliers (Only Pending Payments)
 router.get("/pending-payments", async (req, res) => {
   try {
-    const unpaidOrders = await Order.find({ paymentStatus: "Pending" });
+    const pendingOrders = await Order.find({ paymentStatus: "Pending" });
 
-    if (unpaidOrders.length > 0) {
-      return res.status(200).json({
-        message: "You have unpaid invoices.",
-        unpaidOrders,
-      });
-    } else {
-      return res.status(200).json({
-        message: "No pending payments.",
-      });
-    }
+    const totalAmountOwed = pendingOrders.reduce((total, order) => {
+      return total + order.invoiceAmount;
+    }, 0);
+
+    res.status(200).json({ totalAmountOwed });
   } catch (error) {
-    console.error("Error fetching pending payments:", error);
-    res.status(500).json({ error: "Failed to check pending payments." });
+    console.error("❌ Error fetching pending payments:", error);
+    res.status(500).json({ error: "Failed to fetch pending payments." });
   }
 });
 

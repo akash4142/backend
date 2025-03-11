@@ -16,16 +16,52 @@ router.get("/low-stock", async (req, res) => {
 });
 
 
+// router.get("/", async (req, res) => {
+//   try {
+//     const stocks = await Stock.find().populate("product");
+
+//     // ✅ Fetch all orders with reserved stock, including `orderNumber`
+//     const reservedOrders = await Order.find({ status: "Pending" })
+//       .populate("supplier", "name")
+//       .select("_id orderNumber supplier products");
+
+//     const updatedStock = stocks.map(stock => {
+//       // ✅ Find all orders that reserved this product
+//       const ordersWithThisProduct = reservedOrders.filter(order =>
+//         order.products.some(p => p.product.equals(stock.product._id))
+//       );
+
+//       return {
+//         ...stock.toObject(),
+//         reservedFor: ordersWithThisProduct.map(order => ({
+//           orderId: order._id, // Keep for debugging if needed
+//           orderNumber: order.orderNumber, // ✅ Now we have `orderNumber`
+//           supplier: order.supplier?.name || "Unknown Supplier",
+//           quantityReserved: order.products.find(p => p.product.equals(stock.product._id))?.quantity || 0,
+//         })),
+//       };
+//     });
+
+//     res.json(updatedStock);
+//   } catch (error) {
+//     console.error("❌ Error fetching stock:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// });
+
 router.get("/", async (req, res) => {
   try {
     const stocks = await Stock.find().populate("product");
+
+    // ✅ Filter out stock entries where the product has been deleted
+    const validStocks = stocks.filter(stock => stock.product !== null);
 
     // ✅ Fetch all orders with reserved stock, including `orderNumber`
     const reservedOrders = await Order.find({ status: "Pending" })
       .populate("supplier", "name")
       .select("_id orderNumber supplier products");
 
-    const updatedStock = stocks.map(stock => {
+    const updatedStock = validStocks.map(stock => {
       // ✅ Find all orders that reserved this product
       const ordersWithThisProduct = reservedOrders.filter(order =>
         order.products.some(p => p.product.equals(stock.product._id))
@@ -48,7 +84,6 @@ router.get("/", async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });
-
 
 
 // ✅ Get Out-of-Stock Products
