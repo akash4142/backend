@@ -16,6 +16,7 @@ router.get("/", async (req, res) => {
       .populate({
         path: "products.product",
         select: "name productionProcess packagingType quantityPerMasterBox requiredMaterials",
+        match: { _id: { $ne: null } },
       });
     res.status(200).json(productionOrders);
   } catch (error) {

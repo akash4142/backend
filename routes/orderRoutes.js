@@ -211,37 +211,92 @@ router.get("/", async (req, res) => {
 });
 
 
-// ✅ Release reserved stock if order is cancelled
+// // ✅ Release reserved stock if order is cancelled
+// router.put("/:id/status", async (req, res) => {
+//   try {
+//     const { status } = req.body;
+
+//     if (!["Pending", "Received","In Production", "Packaging", "Completed", "Cancelled"].includes(status)) {
+//       return res.status(400).json({ message: "Invalid status value" });
+//     }
+
+//     const order = await Order.findById(req.params.id);
+//     if (!order) return res.status(404).json({ message: "Order not found" });
+
+//     order.status = status;
+//     // const productStock = await Stock.findOne({ product: order.product });
+
+//     // if (status === "Received" && productStock) {
+//     //   // ✅ Restore reserved stock
+//     //   productStock.currentStock -= order.orderedQuantity;
+//     //   await productStock.save();
+//     // }
+//     if (status === "Received") {
+//       order.paymentStatus = "Pending"; // ✅ Ensure payment status is set correctly
+//     }
+
+//     await order.save();
+//     res.json({ message: `Order status updated to ${status}, Stock Updated`, order });
+//   } catch (error) {
+//     console.error("Backend Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// });
+
+
+// ✅ Order Status Update with Stock & Payment Handling
 router.put("/:id/status", async (req, res) => {
   try {
     const { status } = req.body;
 
-    if (!["Pending", "Received","In Production", "Packaging", "Completed", "Cancelled"].includes(status)) {
+    // ✅ Ensure status is valid
+    const allowedStatuses = ["Pending", "Received", "In Production", "Packaging", "Completed", "Cancelled"];
+    if (!allowedStatuses.includes(status)) {
       return res.status(400).json({ message: "Invalid status value" });
     }
 
-    const order = await Order.findById(req.params.id);
+    // ✅ Find the order
+    const order = await Order.findById(req.params.id).populate("products.product");
     if (!order) return res.status(404).json({ message: "Order not found" });
 
+    const prevStatus = order.status; // Store previous status
     order.status = status;
-    // const productStock = await Stock.findOne({ product: order.product });
 
-    // if (status === "Received" && productStock) {
-    //   // ✅ Restore reserved stock
-    //   productStock.currentStock -= order.orderedQuantity;
-    //   await productStock.save();
-    // }
-    if (status === "Received") {
-      order.paymentStatus = "Pending"; // ✅ Ensure payment status is set correctly
+    // ✅ Handle Stock Adjustments
+    if (status === "Cancelled") {
+      // Restore stock if order is canceled
+      for (let item of order.products) {
+        const productStock = await Stock.findOne({ product: item.product._id });
+        if (productStock) {
+          productStock.currentStock += item.quantity;
+          await productStock.save();
+        }
+      }
     }
 
+    if (status === "Received") {
+      // ✅ Ensure payment status is updated
+      order.paymentStatus = "Pending";
+
+      // ✅ Deduct stock only when the order is received
+      for (let item of order.products) {
+        const productStock = await Stock.findOne({ product: item.product._id });
+        if (productStock) {
+          productStock.currentStock -= item.quantity;
+          await productStock.save();
+        }
+      }
+    }
+
+    // ✅ Save the updated order
     await order.save();
-    res.json({ message: `Order status updated to ${status}, Stock Updated`, order });
+    res.json({ message: `✅ Order status updated to ${status}.`, order });
   } catch (error) {
-    console.error("Backend Error:", error);
+    console.error("❌ Backend Error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });
+
 
 // ✅ Get Purchase History with Multiple Products
 router.get("/history", async (req, res) => {

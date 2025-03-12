@@ -4,24 +4,68 @@ const Order = require("../models/Order");
 const Stock = require("../models/Stock");
 const Production = require("../models/Production");
 
-// Dashboard Overview
+// // Dashboard Overview
+// router.get("/", async (req, res) => {
+//   try {
+//     const totalPurchases = await Order.countDocuments();
+//     const pendingPayments = await Order.find({ paymentStatus: "Pending" }).countDocuments();
+//     const totalStockItems = await Stock.countDocuments();
+//     const ongoingProduction = await Production.find({ status: { $ne: "Completed" } }).countDocuments();
+
+//     res.json({
+//       totalPurchases,
+//       pendingPayments,
+//       totalStockItems,
+//       ongoingProduction,
+//     });
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
+
 router.get("/", async (req, res) => {
   try {
     const totalPurchases = await Order.countDocuments();
-    const pendingPayments = await Order.find({ paymentStatus: "Pending" }).countDocuments();
+    const pendingPayments = await Order.aggregate([
+      { $match: { paymentStatus: "Pending" } },
+      { $group: { _id: null, totalAmount: { $sum: "$invoiceAmount" } } },
+    ]);
     const totalStockItems = await Stock.countDocuments();
-    const ongoingProduction = await Production.find({ status: { $ne: "Completed" } }).countDocuments();
+    const ongoingProduction = await Production.countDocuments({ status: "In Production" });
+
+    // ✅ Monthly Purchase & Payment Data
+    const financeTrends = await Order.aggregate([
+      { $group: { _id: { month: { $month: "$orderDate" } }, purchases: { $sum: 1 }, paymentsDue: { $sum: "$invoiceAmount" } } },
+      { $sort: { "_id.month": 1 } }
+    ]);
+
+    // ✅ Orders Pending vs Completed
+    const productionData = [
+      { name: "Pending Orders", value: await Order.countDocuments({ status: "Pending" }) },
+      { name: "Completed Orders", value: await Order.countDocuments({ status: "Completed" }) },
+    ];
+
+    // ✅ Stock Trends Over Time
+    const stockTrends = await Stock.aggregate([
+      { $group: { _id: { month: { $month: "$lastUpdated" } }, stockLevel: { $sum: "$currentStock" } } },
+      { $sort: { "_id.month": 1 } }
+    ]);
 
     res.json({
       totalPurchases,
-      pendingPayments,
+      pendingPayments: pendingPayments.length > 0 ? pendingPayments[0].totalAmount : 0,
       totalStockItems,
       ongoingProduction,
+      financeTrends,
+      productionData,
+      stockTrends,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("❌ Error fetching dashboard stats:", error);
+    res.status(500).json({ message: "Failed to fetch dashboard stats." });
   }
 });
+
 
 // Monthly Purchase Report
 router.get("/monthly-purchases", async (req, res) => {
