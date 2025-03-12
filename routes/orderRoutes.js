@@ -11,11 +11,17 @@ const fs = require("fs");
 
 router.post("/create", async (req, res) => {
   try {
-    const { products, supplier, customSupplier, expectedDelivery } = req.body;
+    const { products, supplier, customSupplier, expectedDelivery, invoiceNumber } = req.body;
     let { estimatedArrival } = req.body;
 
-    if ((!products && products.length === 0) || (!supplier && !customSupplier)  || !expectedDelivery) {
+    if (!products || products.length === 0 || (!supplier && !customSupplier) || !expectedDelivery || !invoiceNumber) {
       return res.status(400).json({ message: "All fields are required!" });
+    }
+
+    // ✅ Ensure invoiceNumber is unique
+    const existingOrder = await Order.findOne({ invoiceNumber });
+    if (existingOrder) {
+      return res.status(400).json({ message: "❌ Invoice number already exists!" });
     }
 
     let totalInvoiceAmount = 0;
@@ -30,53 +36,15 @@ router.post("/create", async (req, res) => {
         if (!product) {
           return res.status(404).json({ message: "❌ One of the selected products was not found!" });
         }
-
         totalInvoiceAmount += product.price * item.quantity;
       }
     }
-
-    // if (!supplier && !customSupplier) {
-    //   return res.status(400).json({ message: "❌ You must select an existing supplier or enter a custom supplier!" });
-    // }
-
-    // let productStock;
-    // let productPrice = 0;
-
-    // // ✅ If it's an existing product, check stock and price
-    // if (productId) {
-    //   const product = await Product.findById(productId);
-    //   if (!product) {
-    //     return res.status(404).json({ message: "❌ Product not found!" });
-    //   }
-
-    //   productPrice = product.price; // ✅ Fetch product price
-
-    //   productStock = await Stock.findOne({ product: productId });
-    //   if (!productStock) {
-    //     return res.status(404).json({ message: "❌ Stock record not found for this product!" });
-    //   }
-
-    //   // ✅ Debug log: Check stock values
-    //   console.log("🔹 Current Stock:", productStock.currentStock, "Ordered Quantity:", quantity);
-
-    //   // ✅ Check if enough stock is available before placing an order
-    //   if (productStock.currentStock <= 0) {
-    //     return res.status(400).json({ message: "❌ Product is currently out of stock!" });
-    //   }
-
-    //   if (productStock.currentStock < quantity) {
-    //     return res.status(400).json({ message: `❌ Not enough stock available! Only ${productStock.currentStock} units left.` });
-    //   }
-    // }
 
     // ✅ Assign estimatedArrival if missing
     if (!estimatedArrival) {
       estimatedArrival = new Date();
       estimatedArrival.setDate(estimatedArrival.getDate() + 7);
     }
-
-    // // ✅ Calculate Total Price
-    // const totalPrice = productId ? productPrice * quantity : 0; // If custom product, price is set to 0 for now
 
     const newOrder = new Order({
       products,
@@ -85,18 +53,25 @@ router.post("/create", async (req, res) => {
       expectedDelivery,
       estimatedArrival,
       invoiceAmount: totalInvoiceAmount,
+      invoiceNumber,
       status: "Pending",
       paymentStatus: "Pending",
-      paymentDueDate: new Date(new Date().setDate(new Date().getDate()+60)),
+      paymentDueDate: new Date(new Date().setDate(new Date().getDate() + 60)),
     });
 
-    await newOrder.save();
-    res.status(201).json({ message: "✅ Order placed successfully!", order: newOrder });
+    try {
+      await newOrder.save();
+      return res.status(201).json({ message: "✅ Order placed successfully!", order: newOrder });
+    } catch (saveError) {
+      console.error("❌ Error saving order:", saveError);
+      return res.status(500).json({ error: "Failed to save order." });
+    }
   } catch (error) {
     console.error("❌ Error placing order:", error);
-    res.status(500).json({ error: "Failed to create order." });
+    return res.status(500).json({ error: "Failed to create order." });
   }
 });
+
 
 // Generate Excel report for purchase orders
 router.get("/generate-excel", async (req, res) => {
@@ -178,7 +153,7 @@ router.get("/:id/generate-pdf", async (req, res) => {
 router.get("/", async (req, res) => {
   try {
     const { productId, month, year, status, paymentStatus } = req.query;
-    let filter = {};
+    let filter = {status: { $ne: "Completed" }};
 
     // ✅ Filter by Product
     if (productId) {
@@ -213,7 +188,6 @@ router.get("/", async (req, res) => {
       filter.orderDate = { $gte: startDate, $lt: endDate };
     }
 
-    console.log("🛠️ Debug: Filtering orders with:", filter); // ✅ Debugging
 
     const orders = await Order.find(filter)
       .populate("products.product")
@@ -225,39 +199,6 @@ router.get("/", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch orders." });
   }
 });
-
-
-// // ✅ Release reserved stock if order is cancelled
-// router.put("/:id/status", async (req, res) => {
-//   try {
-//     const { status } = req.body;
-
-//     if (!["Pending", "Received","In Production", "Packaging", "Completed", "Cancelled"].includes(status)) {
-//       return res.status(400).json({ message: "Invalid status value" });
-//     }
-
-//     const order = await Order.findById(req.params.id);
-//     if (!order) return res.status(404).json({ message: "Order not found" });
-
-//     order.status = status;
-//     // const productStock = await Stock.findOne({ product: order.product });
-
-//     // if (status === "Received" && productStock) {
-//     //   // ✅ Restore reserved stock
-//     //   productStock.currentStock -= order.orderedQuantity;
-//     //   await productStock.save();
-//     // }
-//     if (status === "Received") {
-//       order.paymentStatus = "Pending"; // ✅ Ensure payment status is set correctly
-//     }
-
-//     await order.save();
-//     res.json({ message: `Order status updated to ${status}, Stock Updated`, order });
-//   } catch (error) {
-//     console.error("Backend Error:", error);
-//     res.status(500).json({ message: "Server error", error: error.message });
-//   }
-// });
 
 
 // ✅ Order Status Update with Stock & Payment Handling

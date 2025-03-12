@@ -13,6 +13,7 @@ const orderSchema = new mongoose.Schema({
   orderDate: { type: Date, default: Date.now },
   estimatedArrival: { type: Date, required: true },
   invoiceAmount: { type: Number, required: true },
+  invoiceNumber:{ type: String, required:true,unique:true},
   status: {
     type: String,
     enum: ["Pending","Received", "In Production", "Packaging", "Completed","Cancelled"],
