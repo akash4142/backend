@@ -11,10 +11,7 @@ const generatePurchaseOrderPDF = (order, filePath) => {
 
       // ✅ Header - Company Title with Blue Background
       doc.rect(40, 40, 520, 70).fill("#004080");
-      doc
-        .fillColor("white")
-        .font("Helvetica-Bold")
-        .fontSize(24)
+      doc.fillColor("white").font("Helvetica-Bold").fontSize(24)
         .text("MARECOM ONSIDE COOP. V.", 50, 60, { align: "center" });
 
       doc.moveDown(1);
@@ -47,15 +44,13 @@ const generatePurchaseOrderPDF = (order, filePath) => {
       // ✅ Table Header with Blue Background
       const tableTop = 250;
       doc.fillColor("#004080").rect(40, tableTop, 520, 25).fill();
-      doc
-        .fillColor("white")
-        .fontSize(11)
-        .font("Helvetica-Bold")
-        .text("ITEM #", 50, tableTop + 7)
-        .text("DESCRIPTION", 120, tableTop + 7)
-        .text("QTY", 280, tableTop + 7)
-        .text("UNIT PRICE", 370, tableTop + 7)
-        .text("TOTAL", 470, tableTop + 7);
+      doc.fillColor("white").fontSize(11).font("Helvetica-Bold")
+        .text("S. No.", 50, tableTop + 7)
+        .text("ITEM #", 100, tableTop + 7)  // 🔥 Manufacturer Reference Here
+        .text("DESCRIPTION", 180, tableTop + 7)
+        .text("QTY", 330, tableTop + 7)
+        .text("UNIT PRICE", 410, tableTop + 7)
+        .text("TOTAL", 500, tableTop + 7);
 
       let totalAmount = 0;
       let yPosition = tableTop + 35;
@@ -70,13 +65,13 @@ const generatePurchaseOrderPDF = (order, filePath) => {
         }
         doc.fillColor("black").font("Helvetica");
 
-        doc
-          .fontSize(10)
-          .text(index + 1, 50, yPosition)
-          .text(p.product?.name || p.customProduct, 120, yPosition)
-          .text(p.quantity, 280, yPosition)
-          .text(`€${p.product.price.toFixed(2)}`, 370, yPosition)
-          .text(`€${totalPrice.toFixed(2)}`, 470, yPosition);
+        doc.fontSize(10)
+          .text(index + 1, 50, yPosition) // S. No.
+          .text(p.product?.manufacturerReference ? p.product.manufacturerReference : "Not Available", 100, yPosition)
+          .text(p.product?.name || p.customProduct, 180, yPosition)
+          .text(p.quantity, 330, yPosition)
+          .text(`€${p.product.price.toFixed(2)}`, 410, yPosition)
+          .text(`€${totalPrice.toFixed(2)}`, 500, yPosition);
 
         yPosition += 20;
       });
@@ -94,10 +89,7 @@ const generatePurchaseOrderPDF = (order, filePath) => {
       doc.text("Authorized by: Marcos Carrillo", 350);
       doc.text(`Date: ${new Date().toLocaleDateString()}`, 350);
       doc.moveDown(2);
-      doc.text(
-        ` If you have any questions regarding this purchase order, feel free to contact us.`,
-        350
-      );
+      doc.text(`If you have any questions regarding this purchase order, feel free to contact us.`, 350);
       doc.text(`Email: purchases@marecomgroup.com`, 350);
       doc.text(`Phone: 656 36 19 05`, 350);
 

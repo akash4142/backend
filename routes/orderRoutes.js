@@ -138,7 +138,10 @@ router.get("/generate-excel", async (req, res) => {
 // Generate PDF for an order
 router.get("/:id/generate-pdf", async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id).populate("products.product supplier");
+    const order = await Order.findById(req.params.id).populate({
+      path: "products.product",
+      select: "name price manufacturerReference", // ✅ Make sure manufacturerReference is selected
+    }).populate("supplier");
 
     // Check if the order exists
     if (!order) {
@@ -172,10 +175,9 @@ router.get("/:id/generate-pdf", async (req, res) => {
   }
 });
 
-
 router.get("/", async (req, res) => {
   try {
-    const { productId, month, year } = req.query;
+    const { productId, month, year, status, paymentStatus } = req.query;
     let filter = {};
 
     // ✅ Filter by Product
@@ -183,25 +185,39 @@ router.get("/", async (req, res) => {
       filter["products.product"] = productId;
     }
 
-    // ✅ Filter by Month & Year (Fix: Use `$gte` and `$lt` Instead of `$expr`)
+    // ✅ Filter by Status
+    if (status) {
+      filter.status = status;
+    }
+
+    // ✅ Filter by Payment Status
+    if (paymentStatus) {
+      filter.paymentStatus = paymentStatus;
+    }
+
+    // ✅ Fix: Ensure correct filtering by month & year
     if (month || year) {
       let startDate, endDate;
-
-      if (year) {
-        startDate = new Date(year, 0, 1); // January 1st of the given year
-        endDate = new Date(year, 11, 31, 23, 59, 59); // December 31st of the given year
-      }
+      const selectedYear = year ? parseInt(year) : new Date().getFullYear(); // Default to current year
 
       if (month) {
-        const selectedMonth = parseInt(month) - 1; // JavaScript months are 0-indexed
-        startDate = new Date(year, selectedMonth, 1); // First day of the selected month
-        endDate = new Date(year, selectedMonth + 1, 0, 23, 59, 59); // Last day of the selected month
+        const selectedMonth = parseInt(month) - 1; // Convert to 0-based index
+
+        startDate = new Date(selectedYear, selectedMonth, 1); // Start of month
+        endDate = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59); // Last day of month
+      } else {
+        startDate = new Date(selectedYear, 0, 1); // Start of year
+        endDate = new Date(selectedYear, 11, 31, 23, 59, 59); // End of year
       }
 
       filter.orderDate = { $gte: startDate, $lt: endDate };
     }
 
-    const orders = await Order.find(filter).populate("products.product").populate("supplier");
+    console.log("🛠️ Debug: Filtering orders with:", filter); // ✅ Debugging
+
+    const orders = await Order.find(filter)
+      .populate("products.product")
+      .populate("supplier");
 
     res.status(200).json(orders);
   } catch (error) {
