@@ -6,24 +6,48 @@ const Product = require("../models/Product");
 const Order = require("../models/Order");
 
 
+// router.get("/", async (req, res) => {
+//   try {
+//     const productionOrders = await Production.find({ status: { $ne: "Completed" } })
+//       .populate({
+//         path: "orderId",
+//         select: "orderNumber status", // ✅ Ensure orderNumber is fetched
+//       })
+//       .populate({
+//         path: "products.product",
+//         select: "name productionProcess packagingType quantityPerMasterBox requiredMaterials",
+//         match: { _id: { $ne: null } },
+//       });
+//     res.status(200).json(productionOrders);
+//   } catch (error) {
+//     console.error("❌ Error fetching production orders:", error);
+//     res.status(500).json({ error: "Failed to fetch production orders." });
+//   }
+// });
+
 router.get("/", async (req, res) => {
-  try {
-    const productionOrders = await Production.find({ status: { $ne: "Completed" } })
-      .populate({
-        path: "orderId",
-        select: "orderNumber status", // ✅ Ensure orderNumber is fetched
-      })
-      .populate({
-        path: "products.product",
-        select: "name productionProcess packagingType quantityPerMasterBox requiredMaterials",
-        match: { _id: { $ne: null } },
-      });
-    res.status(200).json(productionOrders);
-  } catch (error) {
-    console.error("❌ Error fetching production orders:", error);
-    res.status(500).json({ error: "Failed to fetch production orders." });
-  }
-});
+  const productionOrders = await Production.find({ status: { $ne: "Completed" } })
+  .populate({
+    path: "orderId",
+    select: "orderNumber status",
+  })
+  .populate({
+    path: "products.product",
+    select: "name productionProcess packagingType quantityPerMasterBox requiredMaterials",
+  })
+  .lean(); // ✅ Converts Mongoose documents to plain objects for filtering
+
+// ✅ Filter out orders where all products are deleted
+const filteredOrders = productionOrders
+  .map((order) => ({
+    ...order,
+    products: order.products.filter((p) => p.product), // ✅ Remove products that are null
+  }))
+  .filter((order) => order.products.length > 0); // ✅ Remove orders that have NO valid products
+
+res.status(200).json(filteredOrders);
+
+ });
 
 // ✅ Update Comments Separately (Fix Path)
 router.put("/:id/comments", async (req, res) => {

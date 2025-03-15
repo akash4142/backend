@@ -9,20 +9,16 @@ const { generatePurchaseOrderExcel } = require("../utils/excelGenerator");
 const fs = require("fs");
 
 
+
 router.post("/create", async (req, res) => {
   try {
-    const { products, supplier, customSupplier, expectedDelivery, invoiceNumber } = req.body;
+    const { products, supplier, customSupplier, expectedDelivery } = req.body;
     let { estimatedArrival } = req.body;
 
-    if (!products || products.length === 0 || (!supplier && !customSupplier) || !expectedDelivery || !invoiceNumber) {
+    if (!products || products.length === 0 || (!supplier && !customSupplier) || !expectedDelivery ) {
       return res.status(400).json({ message: "All fields are required!" });
     }
 
-    // ✅ Ensure invoiceNumber is unique
-    const existingOrder = await Order.findOne({ invoiceNumber });
-    if (existingOrder) {
-      return res.status(400).json({ message: "❌ Invoice number already exists!" });
-    }
 
     let totalInvoiceAmount = 0;
 
@@ -53,7 +49,6 @@ router.post("/create", async (req, res) => {
       expectedDelivery,
       estimatedArrival,
       invoiceAmount: totalInvoiceAmount,
-      invoiceNumber,
       status: "Pending",
       paymentStatus: "Pending",
       paymentDueDate: new Date(new Date().setDate(new Date().getDate() + 60)),
@@ -397,6 +392,30 @@ router.get("/pending-payments", async (req, res) => {
   } catch (error) {
     console.error("❌ Error fetching pending payments:", error);
     res.status(500).json({ error: "Failed to fetch pending payments." });
+  }
+});
+
+
+
+router.put("/:id/update-invoice", async (req, res) => {
+  try {
+    const { invoiceNumber } = req.body;
+    const orderId = req.params.id;
+
+    // ✅ Ensure order exists
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    // ✅ Update the invoice number
+    order.invoiceNumber = invoiceNumber;
+    await order.save();
+
+    res.status(200).json({ message: "Invoice updated successfully", order });
+  } catch (error) {
+    console.error("❌ Error updating invoice:", error);
+    res.status(500).json({ message: "Failed to update invoice." });
   }
 });
 
