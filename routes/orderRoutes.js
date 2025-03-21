@@ -105,45 +105,39 @@ router.get("/generate-excel", async (req, res) => {
   }
 });
 
-// Generate PDF for an order
+
 router.get("/:id/generate-pdf", async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id).populate({
-      path: "products.product",
-      select: "name price manufacturerReference", // ✅ Make sure manufacturerReference is selected
-    }).populate("supplier");
+    const order = await Order.findById(req.params.id)
+      .populate("products.product supplier");
 
-    // Check if the order exists
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
 
-    const filePath = `./pdfs/purchase_order_${order._id}.pdf`;
+    const fileName = `Purchase_Order_${order.orderNumber || order._id}.pdf`;
+    const filePath = `./pdfs/${fileName}`;
 
-    // Ensure directory exists
+    // Ensure pdfs directory exists
     if (!fs.existsSync("./pdfs")) {
-      fs.mkdirSync("./pdfs", { recursive: true });
+      fs.mkdirSync("./pdfs");
     }
 
-    // Generate PDF file
     await generatePurchaseOrderPDF(order, filePath);
 
-    // Check if the file was generated successfully
-    if (!fs.existsSync(filePath)) {
-      return res.status(500).json({ message: "PDF file generation failed." });
-    }
-
-    // Send the file for download
-    res.download(filePath, `Purchase_Order_${order._id}.pdf`, (err) => {
+    // ✅ Set the correct download name
+    res.download(filePath, fileName, (err) => {
       if (err) {
-        res.status(500).json({ message: "Error generating PDF", error: err.message });
+        console.error("❌ Download Error:", err);
+        res.status(500).json({ message: "Error sending file." });
       }
     });
   } catch (error) {
-    console.error("PDF Generation Error:", error);
+    console.error("❌ PDF Generation Error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });
+
 
 router.get("/", async (req, res) => {
   try {
@@ -416,6 +410,29 @@ router.put("/:id/update-invoice", async (req, res) => {
   } catch (error) {
     console.error("❌ Error updating invoice:", error);
     res.status(500).json({ message: "Failed to update invoice." });
+  }
+});
+
+
+
+// routes/orders.js
+router.put("/:id/update-payment-date", async (req, res) => {
+  try {
+    const { paymentDueDate } = req.body;
+    if (!paymentDueDate) return res.status(400).json({ message: "Payment due date is required." });
+
+    const updatedOrder = await Order.findByIdAndUpdate(
+      req.params.id,
+      { paymentDueDate },
+      { new: true }
+    );
+
+    if (!updatedOrder) return res.status(404).json({ message: "Order not found." });
+
+    res.status(200).json({ message: "Payment due date updated successfully!", updatedOrder });
+  } catch (error) {
+    console.error("❌ Error updating payment due date:", error);
+    res.status(500).json({ message: "Server error." });
   }
 });
 
